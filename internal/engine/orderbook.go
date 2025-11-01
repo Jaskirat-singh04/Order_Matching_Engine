@@ -108,8 +108,8 @@ func (ob *OrderBook) RemoveOrder(orderID string) error {
 		return fmt.Errorf("order not found")
 	}
 	
-	// Remove from lookup
-	delete(ob.Orders, orderID)
+	// Only delete if it's being cancelled (not if it's filled)
+	// Filled orders should stay in the map for status queries
 	
 	// Remove from price level
 	if order.Side == BUY {
@@ -156,6 +156,17 @@ func (ob *OrderBook) removeFromAsks(order *Order) {
 			}
 			return
 		}
+	}
+}
+
+func (ob *OrderBook) RemoveFromPriceLevels(order *Order) {
+	ob.mu.Lock()
+	defer ob.mu.Unlock()
+	
+	if order.Side == BUY {
+		ob.removeFromBids(order)
+	} else {
+		ob.removeFromAsks(order)
 	}
 }
 

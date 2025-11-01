@@ -177,7 +177,6 @@ func (me *MatchingEngine) matchBuyOrder(book *OrderBook, buyOrder *Order) []Trad
 				sellOrder.Status = FILLED
 				// Remove from book
 				bestAsk.Orders = bestAsk.Orders[1:]
-				delete(book.Orders, sellOrder.ID)
 			} else {
 				sellOrder.Status = PARTIAL_FILL
 			}
@@ -235,10 +234,12 @@ func (me *MatchingEngine) matchSellOrder(book *OrderBook, sellOrder *Order) []Tr
 				buyOrder.Status = FILLED
 				// Remove from book
 				bestBid.Orders = bestBid.Orders[1:]
-				delete(book.Orders, buyOrder.ID)
+				// DON'T delete from book.Orders - keep it for queries
+				// delete(book.Orders, buyOrder.ID)  // <-- REMOVE THIS LINE
 			} else {
 				buyOrder.Status = PARTIAL_FILL
-			}
+}
+
 		}
 
 		// If this price level is empty, remove it
