@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"order-matching-engine/internal/engine"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
-
+    "sort"
 	"github.com/gorilla/mux"
 )
 
@@ -20,6 +21,8 @@ type Server struct {
 	ordersMatched  atomic.Int64
 	ordersCancelled atomic.Int64
 	tradesExecuted atomic.Int64
+	latencies       []time.Duration
+	latenciesMutex  sync.Mutex
 }
 
 // NewServer creates a new API server
@@ -28,6 +31,7 @@ func NewServer() *Server {
 		engine:    engine.NewMatchingEngine(),
 		router:    mux.NewRouter(),
 		startTime: time.Now(),
+		latencies: make([]time.Duration, 0, 100000), 
 	}
 
 	// Register routes
@@ -62,7 +66,9 @@ type SubmitOrderRequest struct {
 
 // handleSubmitOrder handles POST /api/v1/orders
 func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now() 
 	var req SubmitOrderRequest
+	
 
 	// Parse JSON
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -102,6 +108,16 @@ func (s *Server) handleSubmitOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Track latency
+	latency := time.Since(startTime)
+	s.latenciesMutex.Lock()
+	s.latencies = append(s.latencies, latency)
+	// Keep only last 100k measurements to avoid memory issues
+	if len(s.latencies) > 100000 {
+		s.latencies = s.latencies[1:]
+	}
+	s.latenciesMutex.Unlock()
 
 	// Update metrics
 	s.ordersReceived.Add(1)
@@ -217,12 +233,41 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	// Calculate orders in book
 	ordersInBook := s.ordersReceived.Load() - s.ordersMatched.Load() - s.ordersCancelled.Load()
 
+	// Calculate latencies
+	s.latenciesMutex.Lock()
+	latenciesCopy := make([]time.Duration, len(s.latencies))
+	copy(latenciesCopy, s.latencies)
+	s.latenciesMutex.Unlock()
+
+	var p50, p99, p999 float64
+	if len(latenciesCopy) > 0 {
+		// Sort latencies
+		sort.Slice(latenciesCopy, func(i, j int) bool {
+			return latenciesCopy[i] < latenciesCopy[j]
+		})
+
+		p50 = float64(latenciesCopy[int(float64(len(latenciesCopy))*0.50)].Microseconds()) / 1000.0
+		p99 = float64(latenciesCopy[int(float64(len(latenciesCopy))*0.99)].Microseconds()) / 1000.0
+		p999 = float64(latenciesCopy[int(float64(len(latenciesCopy))*0.999)].Microseconds()) / 1000.0
+	}
+
+	// Calculate throughput
+	uptime := time.Since(s.startTime).Seconds()
+	throughput := float64(0)
+	if uptime > 0 {
+		throughput = float64(s.ordersReceived.Load()) / uptime
+	}
+
 	response := map[string]interface{}{
-		"orders_received":  s.ordersReceived.Load(),
-		"orders_matched":   s.ordersMatched.Load(),
-		"orders_cancelled": s.ordersCancelled.Load(),
-		"orders_in_book":   ordersInBook,
-		"trades_executed":  s.tradesExecuted.Load(),
+		"orders_received":        s.ordersReceived.Load(),
+		"orders_matched":         s.ordersMatched.Load(),
+		"orders_cancelled":       s.ordersCancelled.Load(),
+		"orders_in_book":         ordersInBook,
+		"trades_executed":        s.tradesExecuted.Load(),
+		"latency_p50_ms":         p50,
+		"latency_p99_ms":         p99,
+		"latency_p999_ms":        p999,
+		"throughput_orders_per_sec": throughput,
 	}
 
 	respondJSON(w, http.StatusOK, response)
