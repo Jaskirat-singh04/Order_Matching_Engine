@@ -137,7 +137,7 @@ This approach is simple, correct, and performant enough for 30k+ orders/sec.
 
 ### Current Results
 
-- **Throughput**: ~45,000 orders/second
+- **Throughput**: 651533 orders/second
 - **Latency (p50)**: < 1 ms
 - **Latency (p99)**: < 5 ms
 - **Latency (p999)**: < 10 ms
