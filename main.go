@@ -2,24 +2,30 @@ package main
 
 import (
 	"fmt"
-	"order-matching-engine/internal/engine"
+	"log"
+	"order-matching-engine/internal/api"
 )
 
 func main() {
-	// Create order book for AAPL
-	book := engine.NewOrderBook("AAPL")
-	
-	// Create some orders
-	buyOrder := engine.NewOrder("AAPL", engine.BUY, engine.LIMIT, 15050, 100)
-	sellOrder := engine.NewOrder("AAPL", engine.SELL, engine.LIMIT, 15100, 50)
-	
-	// Add to book
-	book.AddOrder(buyOrder)
-	book.AddOrder(sellOrder)
-	
-	// Check best prices
-	fmt.Printf("Best Bid: %d (should be 15050)\n", book.GetBestBid())
-	fmt.Printf("Best Ask: %d (should be 15100)\n", book.GetBestAsk())
-	
-	fmt.Println("\n✅ Basic order book working!")
+	fmt.Println("🚀 Starting Order Matching Engine...")
+
+	// Create server
+	server := api.NewServer()
+
+	// Start server
+	port := "8081"
+	fmt.Printf("✅ Server running on http://localhost:%s\n", port)
+	fmt.Println("📖 Endpoints:")
+	fmt.Println("   POST   /api/v1/orders")
+	fmt.Println("   DELETE /api/v1/orders/{id}")
+	fmt.Println("   GET    /api/v1/orders/{id}")
+	fmt.Println("   GET    /api/v1/orderbook/{symbol}")
+	fmt.Println("   GET    /health")
+	fmt.Println("   GET    /metrics")
+	fmt.Println()
+
+	// Start server (blocking call)
+	if err := server.Start(port); err != nil {
+		log.Fatal("Server failed:", err)
+	}
 }
